@@ -1,9 +1,9 @@
 #include "helpers.h"
 
 void translateImg(cv::Mat &img, cv::Mat&img_out, 
-		double offsetx, double offsety) {
-	cv::Mat trans_mat = (cv::Mat_<double>(2,3) << 1, 0, offsetx, 0, 1, offsety);
-	cv::warpAffine(img, img_out, trans_mat, img.size());
+    double offsetx, double offsety) {
+  cv::Mat trans_mat = (cv::Mat_<double>(2,3) << 1, 0, offsetx, 0, 1, offsety);
+  cv::warpAffine(img, img_out, trans_mat, img.size());
 }
 
 cv::Mat ImageStabilisation(
@@ -22,11 +22,11 @@ cv::Mat ImageStabilisation(
     }
   }
   if (num_points>0) {
-  	cv::Mat image_out;
-  	present_frame.copyTo(image_out);
+    cv::Mat image_out;
+    present_frame.copyTo(image_out);
     total_deviation = total_deviation/num_points;
     std::cerr << "Deviation: " << total_deviation.x 
-    					<< "\t" << total_deviation.y <<"\n" ;
+              << "\t" << total_deviation.y <<"\n" ;
     translateImg(present_frame, image_out, -total_deviation.x, -total_deviation.y);
     return image_out;
   }
