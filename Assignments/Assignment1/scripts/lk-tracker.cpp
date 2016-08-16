@@ -10,13 +10,15 @@ const int kMaxCount = 1000;
 int main() {
   cv::VideoCapture cap;
   cap.open(0);
-  cv::Mat present_frame, previous_gray, present_gray;
-  std::vector<cv::Point2f> tracking_points, new_positions;
+  cv::Mat present_frame, previous_gray, present_gray, gradx, grady, my_frame;
+  std::vector<cv::Point2f> tracking_points, new_positions, self_gfeatures;
   cv::TermCriteria termcrit(cv::TermCriteria::COUNT|cv::TermCriteria::EPS, 
     20, 0.03);
   cv::Size subPixWinSize(10, 10), window_size(31, 31);
   int frameid=0;
   cv::namedWindow("Tracking", 1);
+  cv::namedWindow("GradX", 2);
+  cv::namedWindow("GradY", 3);
   
   if (!cap.isOpened()) {
     std::cerr << "Unable to start camera stream\n";
@@ -26,6 +28,7 @@ int main() {
   while (1) {
     cap >> present_frame;
     cv::cvtColor(present_frame, present_gray, cv::COLOR_BGR2GRAY);
+    present_frame.copyTo(my_frame);
     if (frameid==0) {
       present_gray.copyTo(previous_gray);
     }
@@ -39,7 +42,7 @@ int main() {
       }
       std::cerr << "Got features of size " << tracking_points.size() <<"\n"; 
     }
-
+    myGoodFeaturesToTrack(present_gray, gradx, grady, self_gfeatures);
     if (tracking_points.size() > 0 ) {
       // Do tracking
       std::vector<uchar> tracking_status; 
@@ -68,8 +71,13 @@ int main() {
       }
       tracking_points = updated_points;
     }
+    for (int i=0; i<self_gfeatures.size();i++) {
+      cv::circle(my_frame, self_gfeatures[i], 3, cv::Scalar(0, 255, 0), -1, 8);
+    }
     cv::imshow("Tracking", present_frame);
-    
+    cv::imshow("GradX", gradx);
+    cv::imshow("GradY", grady);
+    cv::imshow("MyPoints", my_frame);
     char c = (char)cv::waitKey(10);
     if ( c== 27 ) 
       break;
