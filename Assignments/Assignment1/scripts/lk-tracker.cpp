@@ -11,7 +11,7 @@ int main() {
   cv::VideoCapture cap;
   cap.open(0);
   cv::Mat present_frame, previous_gray, present_gray, gradx, grady, my_frame;
-  std::vector<cv::Point2f> tracking_points, new_positions, self_gfeatures;
+  std::vector<cv::Point2f> tracking_points, new_positions, self_gfeatures, my_new_positions;
   cv::TermCriteria termcrit(cv::TermCriteria::COUNT|cv::TermCriteria::EPS, 
     20, 0.03);
   cv::Size subPixWinSize(10, 10), window_size(31, 31);
@@ -45,7 +45,7 @@ int main() {
     myGoodFeaturesToTrack(present_gray, gradx, grady, self_gfeatures);
     if (tracking_points.size() > 0 ) {
       // Do tracking
-      std::vector<uchar> tracking_status; 
+      std::vector<uchar> tracking_status, my_tracking_status; 
       std::vector<float> tracking_error;
       if (previous_gray.empty()) {
         std::cerr << "Image was empty\n";
@@ -61,12 +61,19 @@ int main() {
         termcrit, 
         0, 
         0.001);
+      myOpticalFlow(previous_gray, present_gray,tracking_points, 
+        my_new_positions, 3, my_tracking_status);
       std::vector<cv::Point2f> updated_points;
-      present_frame = ImageStabilisation(previous_gray, present_gray, tracking_points, new_positions, tracking_status);
-      for (int i=0; i<new_positions.size() ; i++) {
+      // present_frame = ImageStabilisation(previous_gray, present_gray, tracking_points, new_positions, tracking_status);
+      for (int i=0; i<new_positions.size(); i++) {
         if (tracking_status[i]) {
           updated_points.push_back(new_positions[i]);
           cv::circle(present_frame, new_positions[i], 3, cv::Scalar(0, 255, 0), -1, 8);         
+        }
+      }
+      for (int i=0; i<my_new_positions.size(); i++) {
+        if (my_tracking_status[i]) {
+          cv::circle(present_frame, new_positions[i], 3, cv::Scalar(255, 0, 0), -1, 8);
         }
       }
       tracking_points = updated_points;

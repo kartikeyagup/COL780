@@ -90,3 +90,80 @@ void myGoodFeaturesToTrack(cv::Mat &image, cv::Mat &gradx, cv::Mat &grady, std::
     }
   }
 }
+
+cv::Point2f WarpPoint(float point_x, float point_y, 
+  Eigen::Matrix<float, 2, 3> &warp_matrix) {
+  Eigen::Matrix<float, 3, 1> temp;
+  temp << point_x, point_y, 1;
+  Eigen::Matrix<float, 2, 1> result = warp_matrix * temp;
+  return cv::Point2f(result.data()[0], result.data()[1]);
+}
+
+void HessianMatrix(cv::Mat &image_final,
+  cv::Point2f &tracked_in,
+  cv::Mat &gradx,
+  cv::Mat &grady,
+  int gridsize,
+  Eigen::Matrix<float, 2, 3> &warp_matrix,
+  Eigen::Matrix<float, 6, 6> &hessian) {
+  hessian.setZero();
+  for (int i=(-gridsize/2); i<=gridsize/2; i++) {
+    for (int j=-(gridsize/2); j<=gridsize/2; j++) {
+      Eigen::Matrix<float, 2, 6> delw;
+      delw << i, 0, j, 0, 1, 0, 0, i, 0, j, 0, 1;
+
+    }
+  }
+}
+
+bool TrackRegion(cv::Mat &image_initial,
+  cv::Mat &image_final,
+  cv::Point2f &tracked_in,
+  cv::Point2f &tracked_out,
+  int gridsize) {
+  // Initialize warp to default
+  Eigen::Matrix<float, 2, 3> warp_matrix;
+  warp_matrix << 1, 0, 0, 0, 1, 0;
+  if ((tracked_in.x < gridsize/2) || (tracked_in.y < gridsize/2)) {
+    return false;
+  }
+  if ((tracked_in.x + gridsize/2 >= image_initial.cols) || (tracked_in.y + gridsize/2 >= image_initial.rows)) {
+    return false;
+  }
+
+  cv::Mat template_image = image_initial(cv::Rect(
+    tracked_in.x - gridsize/2,
+    tracked_in.y - gridsize/2,
+    gridsize, gridsize));
+  cv::Mat guessed, gradient;
+  template_image.copyTo(guessed);
+  template_image.copyTo(gradient);
+  while (true) {
+    // Initialise I(W(x;p)) and gradient I
+    for (int i=-(gridsize/2) ; i <=gridsize/2 ; i++) {
+      for (int j= -(gridsize/2) ; j<=gridsize/2 ; j++) {
+        cv::Point2f warpedPoint = WarpPoint(tracked_in.x + i, tracked_in.y + j, warp_matrix);
+        guessed.at<uchar>(i+gridsize/2, j+gridsize/2) = image_final.at<uchar>(warpedPoint);
+        // gradient.at<uchar>(i+gridsize/2, j+gridsize/2) = graident_image.at<uchar>(warpedPoint);
+      }
+    }
+    return false;
+  }
+}
+
+void myOpticalFlow(cv::Mat &image_initial,
+  cv::Mat &image_final,
+  std::vector<cv::Point2f> tracked_in,
+  std::vector<cv::Point2f> tracked_out,
+  int gridsize,
+  std::vector<uchar> tracking_status) {
+  tracked_out.resize(tracked_in.size());
+  tracking_status.resize(tracked_in.size());
+  for (int i=0; i<tracked_in.size(); i++) {
+    if (TrackRegion(image_initial, image_final, tracked_in[i], tracked_out[i], gridsize)) {
+      tracking_status[i] = 1;
+    } else {
+      tracking_status[i] = 0;
+    }
+  }
+}
