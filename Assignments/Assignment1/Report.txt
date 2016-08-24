@@ -1,0 +1,9 @@
+Components:
+1) Feature Points
+For this, I used openCV's goodfeaturestotrack. I would run this at every 50th frame so that the number of features would stay high even as they keep dropping out in tracking process.
+2) Optical Flow
+For this, I used openCV's calcopticalflowpyrlk. It is based on LK tracker. Based on the output of the tracker, I would update the points considered.
+3) Image Stabilization
+For this, I used the results from the previous 2 components. By calculating the optical flow on the image, I computed an average optical flow vector for the image. This was then used to warp the image in the reverse so as to stabilise. Other things which I tried were using median instead of mean. Better results were obtained when the mean optical flow was not calculated on all the flow vectors but only on those which had small magnitude.
+
+Apart from the above, I have written my own feature point detector. It is based on computing Eigen values from a matrix representing the intensities of a concerned grid in the image. The time taken by this function is more than opencv's goodfeaturestotrack. A possible improvement in this is to not compute this for the entire image but work in blocks.
