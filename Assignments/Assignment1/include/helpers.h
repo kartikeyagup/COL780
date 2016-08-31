@@ -33,6 +33,8 @@ cv::Point2f WarpPoint(float point_x, float point_y,
   Eigen::Matrix<float, 2, 3> &warp_matrix);
 
 bool TrackRegion(cv::Mat &image_initial,
+  cv::Mat &gradx,
+  cv::Mat &grady,
   cv::Mat &image_final,
   cv::Point2f &tracked_in,
   cv::Point2f &tracked_out,

@@ -99,24 +99,29 @@ cv::Point2f WarpPoint(float point_x, float point_y,
   return cv::Point2f(result.data()[0], result.data()[1]);
 }
 
-void HessianMatrix(cv::Mat &image_final,
-  cv::Point2f &tracked_in,
-  cv::Mat &gradx,
-  cv::Mat &grady,
+void HessianMatrix(cv::Point2f &tracked_in,
+  cv::Mat &grad_finx,
+  cv::Mat &grad_finy,
   int gridsize,
-  Eigen::Matrix<float, 2, 3> &warp_matrix,
-  Eigen::Matrix<float, 6, 6> &hessian) {
+  Eigen::Matrix<float, 6, 6> &hessian,
+  Eigen::Matrix<float, 2, 3> &warp) {
   hessian.setZero();
   for (int i=(-gridsize/2); i<=gridsize/2; i++) {
     for (int j=-(gridsize/2); j<=gridsize/2; j++) {
       Eigen::Matrix<float, 2, 6> delw;
       delw << i, 0, j, 0, 1, 0, 0, i, 0, j, 0, 1;
-
+      Eigen::Matrix<float, 1, 2> grad;
+      grad << grad_finx.at<uchar>(WarpPoint(tracked_in.x + i, tracked_in.y + j, warp)), 
+              grad_finy.at<uchar>(WarpPoint(tracked_in.x + i, tracked_in.y + j, warp));
+      Eigen::Matrix<float, 1, 6> result = grad * delw;
+      hessian += result.transpose() * result; 
     }
   }
 }
 
 bool TrackRegion(cv::Mat &image_initial,
+  cv::Mat &grad_finx,
+  cv::Mat &grad_finy,
   cv::Mat &image_final,
   cv::Point2f &tracked_in,
   cv::Point2f &tracked_out,
@@ -130,24 +135,53 @@ bool TrackRegion(cv::Mat &image_initial,
   if ((tracked_in.x + gridsize/2 >= image_initial.cols) || (tracked_in.y + gridsize/2 >= image_initial.rows)) {
     return false;
   }
-
-  cv::Mat template_image = image_initial(cv::Rect(
-    tracked_in.x - gridsize/2,
-    tracked_in.y - gridsize/2,
-    gridsize, gridsize));
-  cv::Mat guessed, gradient;
-  template_image.copyTo(guessed);
-  template_image.copyTo(gradient);
+  int iter=0;
   while (true) {
+    iter++;
     // Initialise I(W(x;p)) and gradient I
+    Eigen::Matrix<float, 6, 6> hessian;
+    HessianMatrix(tracked_in, grad_finx, grad_finy, gridsize, hessian, warp_matrix);
+    std::cerr << hessian.determinant() << " is the det\n";
+    Eigen::Matrix<float, 6, 6> hessian_inverse = hessian.inverse();
+    Eigen::Matrix<float, 6, 1> cummulation;
+    cummulation.setZero();
+    std::cerr << "about to enter for loop\n";
     for (int i=-(gridsize/2) ; i <=gridsize/2 ; i++) {
       for (int j= -(gridsize/2) ; j<=gridsize/2 ; j++) {
         cv::Point2f warpedPoint = WarpPoint(tracked_in.x + i, tracked_in.y + j, warp_matrix);
-        guessed.at<uchar>(i+gridsize/2, j+gridsize/2) = image_final.at<uchar>(warpedPoint);
-        // gradient.at<uchar>(i+gridsize/2, j+gridsize/2) = graident_image.at<uchar>(warpedPoint);
+        float scalingfactor = image_initial.at<uchar>(tracked_in.y + j, tracked_in.x +i) -
+          image_final.at<uchar>(warpedPoint);
+
+        Eigen::Matrix<float, 2, 6> delw;
+        delw << i, 0, j, 0, 1, 0, 0, i, 0, j, 0, 1;
+        Eigen::Matrix<float, 1, 2> grad;
+        grad << grad_finx.at<uchar>(WarpPoint(tracked_in.x + i, tracked_in.y + j, warp_matrix)), 
+              grad_finy.at<uchar>(WarpPoint(tracked_in.x + i, tracked_in.y + j, warp_matrix));
+        Eigen::Matrix<float, 1, 6> result = grad * delw;
+        Eigen::Matrix<float, 6, 1> result_transpose =result.transpose();
+        
+        cummulation += scalingfactor*result_transpose;        
       }
     }
-    return false;
+    Eigen::Matrix<float, 6, 1> delta_p = hessian_inverse*cummulation;
+    std::cerr << "Delta p " << delta_p <<"\n";
+    Eigen::Matrix<float, 2, 3> delta_p_warp;
+    delta_p_warp << delta_p.data()[0], delta_p.data()[1], delta_p.data()[2], 
+        delta_p.data()[3], delta_p.data()[4], delta_p.data()[5];
+    bool done = true;
+    for (int i=0;i<6;i++) {
+      if (delta_p.data()[i] > 0.1)
+        done = false;
+    }
+    if (done) {
+      // Put updated point
+      return true;
+    } else {
+      warp_matrix+=delta_p_warp;
+    }
+    std::cerr << "Done updating all crap\n";
+    if (iter>10)
+      return false;
   }
 }
 
@@ -159,8 +193,12 @@ void myOpticalFlow(cv::Mat &image_initial,
   std::vector<uchar> tracking_status) {
   tracked_out.resize(tracked_in.size());
   tracking_status.resize(tracked_in.size());
+  cv::Mat grad_finx, grad_finy;
+  Sobel(image_final, grad_finx, CV_16S, 1, 0, 3, 1, 0, cv::BORDER_DEFAULT);
+  Sobel(image_final, grad_finy, CV_16S, 0, 1, 3, 1, 0, cv::BORDER_DEFAULT);
+
   for (int i=0; i<tracked_in.size(); i++) {
-    if (TrackRegion(image_initial, image_final, tracked_in[i], tracked_out[i], gridsize)) {
+    if (TrackRegion(image_initial, grad_finx, grad_finy, image_final, tracked_in[i], tracked_out[i], gridsize)) {
       tracking_status[i] = 1;
     } else {
       tracking_status[i] = 0;
